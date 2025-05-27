@@ -1,0 +1,33 @@
+CC = g++
+CFLAGS = -Wall -g -O2
+LIBS = -lm
+
+# Source files
+SOURCES = collect_data_network.cpp MPU6050.cpp I2Cdev.cpp
+OBJECTS = $(SOURCES:.cpp=.o)
+TARGET = mpu6050_network
+
+# Default target
+all: $(TARGET)
+
+# Build target
+$(TARGET): $(OBJECTS)
+	$(CC) $(CFLAGS) -o $(TARGET) $(OBJECTS) $(LIBS)
+
+# Compile source files
+%.o: %.cpp
+	$(CC) $(CFLAGS) -c $< -o $@
+
+# Clean build files
+clean:
+	rm -f $(OBJECTS) $(TARGET)
+
+# Install (copy to /usr/local/bin)
+install: $(TARGET)
+	sudo cp $(TARGET) /usr/local/bin/
+
+# Run the program
+run: $(TARGET)
+	sudo ./$(TARGET)
+
+.PHONY: all clean install run 
