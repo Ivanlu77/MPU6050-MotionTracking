@@ -16,7 +16,7 @@
 MPU6050 mpu;
 
 // Network configuration
-#define SERVER_IP "192.168.1.100"  // Replace with your computer's IP
+#define SERVER_IP "192.168.1.104"  // Replace with your computer's IP
 #define SERVER_PORT 8888
 int sockfd;
 struct sockaddr_in server_addr;
