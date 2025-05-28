@@ -13,6 +13,8 @@
 #include <sys/timeb.h>
 #include <sys/time.h>
 #include <wiringPi.h>
+#include <termios.h>
+#include <fcntl.h>
 
 MPU6050 mpu;
 
@@ -42,7 +44,7 @@ VectorFloat gravity;    // [x, y, z]            gravity vector
 float euler[3];         // [psi, theta, phi]    Euler angle container
 float ypr[3];           // [yaw, pitch, roll]   yaw/pitch/roll container and gravity vector
 
-int lred=2,lgreen=0,button=3;
+int lred=2,lgreen=0;
 bool state=0;
 // packet structure for InvenSense teapot demo
 uint8_t teapotPacket[14] = { '$', 0x02, 0,0, 0,0, 0,0, 0,0, 0x00, 0x00, '\r', '\n' };
@@ -57,8 +59,34 @@ FILE    *arq_Accel,
 
 std::string namepaste="";
 
-struct timeval start, end, startc, endc,startb, endb;
-long mtime, seconds, useconds,timestart,secondsb, usecondsb,timestartb;
+struct timeval start, end, startc, endc;
+long mtime, seconds, useconds,timestart;
+
+// Terminal settings for non-blocking keyboard input
+struct termios old_tio, new_tio;
+
+// Function to setup non-blocking keyboard input
+void setup_keyboard() {
+    tcgetattr(STDIN_FILENO, &old_tio);
+    new_tio = old_tio;
+    new_tio.c_lflag &= (~ICANON & ~ECHO);
+    tcsetattr(STDIN_FILENO, TCSANOW, &new_tio);
+    fcntl(STDIN_FILENO, F_SETFL, O_NONBLOCK);
+}
+
+// Function to restore terminal settings
+void restore_keyboard() {
+    tcsetattr(STDIN_FILENO, TCSANOW, &old_tio);
+}
+
+// Function to check for keyboard input
+char get_key() {
+    char ch = 0;
+    if (read(STDIN_FILENO, &ch, 1) == 1) {
+        return ch;
+    }
+    return 0;
+}
 
 // ================================================================
 // ===                      INITIAL SETUP                       ===
@@ -73,7 +101,6 @@ void setup() {
     wiringPiSetup();
     pinMode(lred,OUTPUT);
     pinMode(lgreen,OUTPUT);
-    pinMode(button,INPUT);
     
     digitalWrite(lred,HIGH);
     digitalWrite(lgreen,LOW);
@@ -126,6 +153,15 @@ void setup() {
         
     gettimeofday(&start, NULL);
     gettimeofday(&startc, NULL);
+    
+    // Setup keyboard input
+    setup_keyboard();
+    
+    printf("\n=== MPU6050 Data Collection ===\n");
+    printf("Controls:\n");
+    printf("  's' - Start/Stop data collection\n");
+    printf("  'q' - Quit program\n");
+    printf("Waiting for initialization (25 seconds)...\n");
 }
 
 // ================================================================
@@ -141,22 +177,25 @@ void loop() {
     if(timestart>25000)
         digitalWrite(lgreen,HIGH);
         
-    if (digitalRead(button)==true && timestart>25000){
-        gettimeofday(&startb, NULL);
-        
-        while(digitalRead(button)){
-            gettimeofday(&endb, NULL);
-            secondsb = endb.tv_sec - startb.tv_sec;
-            usecondsb = endb.tv_usec - startb.tv_usec;
-            timestartb = ((secondsb) * 1000 + usecondsb/1000.0) + 0.5;
-            
-            if(timestartb>5000&&state!=1){
-                execl("/usr/bin/sudo","sudo","shutdown","-h","now",NULL);
-                return;
-            }
+    // Check for keyboard input
+    char key = get_key();
+    
+    if (key == 'q' || key == 'Q') {
+        printf("\nQuitting program...\n");
+        if(state) {
+            // Close files if currently collecting
+            fclose(arq_Accel);
+            fclose(arq_Gyro);
+            fclose(arq_Quaternions);
+            fclose(arq_LinearAcc);
         }
-        
+        restore_keyboard();
+        exit(0);
+    }
+    
+    if ((key == 's' || key == 'S') && timestart>25000){
         if(state){
+            // Stop data collection
             fclose(arq_Accel);
             fclose(arq_Gyro);
             fclose(arq_Quaternions);
@@ -165,11 +204,14 @@ void loop() {
             fclose(arq_LinearAcc);
             //fclose(arq_WorldAcc);
             digitalWrite(lred,HIGH);
+            printf("\nData collection stopped. Files saved in: %s\n", namepaste.c_str());
+            printf("Press 's' to start new collection or 'q' to quit.\n");
         }else{
+            // Start data collection
             digitalWrite(lred,LOW);
             DIR *d;
             struct dirent *dir;
-            d = opendir ("/home/pi/MPU6050-Pi-Demo/Datas");
+            d = opendir ("./Datas");
             int dir_len=0;
             if (d != NULL){
                 while ((dir = readdir(d)) != NULL)
@@ -179,9 +221,9 @@ void loop() {
                 perror ("Couldn't open the directory");
             }  
 
-            printf("%d",dir_len);
-            namepaste="/home/pi/MPU6050-Pi-Demo/Datas/data_"+std::to_string(dir_len-2);
-            printf(namepaste.c_str());
+            printf("Creating data folder %d\n",dir_len-2);
+            namepaste="./Datas/data_"+std::to_string(dir_len-2);
+            printf("Data will be saved to: %s\n", namepaste.c_str());
 
             std::string new_dir = namepaste;
             std::string existing_dir = ".";
@@ -219,11 +261,12 @@ void loop() {
             //fprintf(arq_WorldAcc,"time,accx,accy,accz\n");
             
             gettimeofday(&startc, NULL);
+            printf("Data collection started! Press 's' to stop.\n");
         }
         state=!state;
-        printf("Change state ");
-        printf("%d\n",state);
+        printf("State changed to: %s\n", state ? "COLLECTING" : "READY");
     }
+    
     // if programming failed, don't try to do anything
     if (!dmpReady) return;
     // get current FIFO count
@@ -245,18 +288,18 @@ void loop() {
         useconds = endc.tv_usec - startc.tv_usec;
         mtime = ((seconds) * 1000 + useconds/1000.0) + 0.5;
         // display time in milliseconds
-        printf("\ntime %ld ms    ",mtime);
+        if(state) printf("\rtime %ld ms    ",mtime);
         
         #ifdef OUTPUT_READABLE_ACCEL
             // display accel values in easy matrix form: x y z
             mpu.dmpGetAccel(&acc, fifoBuffer);
-            printf("accel  %6d %6d %6d    ",acc.x,acc.y,acc.z);
+            if(state) printf("accel  %6d %6d %6d    ",acc.x,acc.y,acc.z);
         #endif
         
         #ifdef OUTPUT_READABLE_GYRO
             // display accel values in easy matrix form: x y z
             mpu.dmpGetGyro(&gyr, fifoBuffer);
-            printf("gryro  %6d %6d %6d    ",gyr.x,gyr.y,gyr.z);
+            if(state) printf("gryro  %6d %6d %6d    ",gyr.x,gyr.y,gyr.z);
         #endif
         
         #ifdef OUTPUT_READABLE_QUATERNION
@@ -320,7 +363,7 @@ void loop() {
             Serial.write(teapotPacket, 14);
             teapotPacket[11]++; // packetCount, loops at 0xFF on purpose
         #endif
-        printf("\n");
+        if(state) printf("\n");
         if(state){
             fprintf(arq_Accel,"%ld,%6d,%6d,%6d\n",mtime,acc.x,acc.y,acc.z);
             fprintf(arq_Gyro,"%ld,%6d,%6d,%6d\n",mtime,gyr.x,gyr.y,gyr.z);
@@ -338,6 +381,7 @@ int main() {
     //usleep(100000);
     while(1){
         loop();
+        usleep(1000); // Small delay to prevent excessive CPU usage
     }
     
     return 0;

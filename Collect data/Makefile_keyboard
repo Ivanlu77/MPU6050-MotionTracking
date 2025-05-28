@@ -1,0 +1,43 @@
+CC = g++
+CFLAGS = -Wall -g -O3 -std=c++17
+INCLUDES = -I.
+LFLAGS = -L.
+LIBS = -lwiringPi -lm -lpthread
+
+# Source files
+SOURCES = collect_data.cpp I2Cdev.cpp MPU6050.cpp
+OBJECTS = $(SOURCES:.cpp=.o)
+
+# Executable names
+MAIN = collect_data_keyboard
+ZERO = IMU_zero
+
+# Default target
+all: $(MAIN) $(ZERO)
+
+# Main program
+$(MAIN): $(OBJECTS)
+	$(CC) $(CFLAGS) $(INCLUDES) -o $(MAIN) $(OBJECTS) $(LFLAGS) $(LIBS)
+
+# IMU zero calibration program
+$(ZERO): IMU_zero.cpp I2Cdev.cpp MPU6050.cpp
+	$(CC) $(CFLAGS) $(INCLUDES) -o $(ZERO) IMU_zero.cpp I2Cdev.cpp MPU6050.cpp $(LFLAGS) $(LIBS)
+
+# Object files
+.cpp.o:
+	$(CC) $(CFLAGS) $(INCLUDES) -c $< -o $@
+
+# Clean
+clean:
+	$(RM) *.o *~ $(MAIN) $(ZERO)
+
+# Install dependencies (run with sudo)
+install-deps:
+	apt-get update
+	apt-get install -y libgtkmm-3.0-dev wiringpi
+
+# Create data directory
+setup:
+	mkdir -p Datas
+
+.PHONY: all clean install-deps setup 

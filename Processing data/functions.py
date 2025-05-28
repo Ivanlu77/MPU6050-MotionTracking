@@ -80,9 +80,8 @@ def norm(v):
         for j in range(3):
             t+=v.loc[i][j]**2
         t = np.sqrt(t)
-        print(t)
         T = pd.DataFrame([t],columns=['norm'])
-        n = n.append(T,ignore_index = True)
+        n = pd.concat([n, T], ignore_index=True)
         t = 0
     return n
 # Remove n% of position or uvw vector
@@ -161,29 +160,29 @@ def get_norm(data):
             t+=data.loc[i][j]**2
         t = np.sqrt(t)
         T = pd.DataFrame([t],columns=['norm'])
-        norm = norm.append(T,ignore_index = True)
+        norm = pd.concat([norm, T], ignore_index=True)
         t = 0
     return norm
 # Calculate integral
 def integral(time,data,name):
-    ip = 0
+    ip = np.array([0,0,0])  # Initialize as numpy array
     midp = pd.DataFrame([np.array([0,0,0])],columns=data.columns.to_numpy())
     l = pd.DataFrame([np.array([0,0,0])],columns=data.columns.to_numpy())
     for i in range(len(data)-1):
         ip+=(data.loc[i]+data.loc[i+1])*(time[i+1]-time[i])/2
-        l = l.append([ip],ignore_index=True)    
+        l = pd.concat([l, pd.DataFrame([ip], columns=data.columns.to_numpy())], ignore_index=True)
     l = l.set_axis(name,axis='columns')
     return l*1.25
 # Calculate velocity integral by removing stationary periods
 def integral_vel(data,time,stationary):
     name=['velx','vely','velz']
-    ip = 0
+    ip = np.array([0,0,0])  # Initialize as numpy array
     l = pd.DataFrame([np.array([0,0,0])],columns=data.columns.to_numpy())
     for i in range(len(data)-1):
         ip+=(data.loc[i]+data.loc[i+1])*(time[i+1]-time[i])/2
         if stationary[i]!=0:
-            ip=pd.DataFrame([np.array([0,0,0])],columns=data.columns.to_numpy())
-        l = l.append([ip],ignore_index=True)
+            ip = np.array([0,0,0])  # Reset to zero array, not DataFrame
+        l = pd.concat([l, pd.DataFrame([ip], columns=data.columns.to_numpy())], ignore_index=True)
     l = l.set_axis(name,axis='columns')
     return l
 ##################################################
