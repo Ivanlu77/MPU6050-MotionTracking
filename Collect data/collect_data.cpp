@@ -161,7 +161,7 @@ void setup() {
     printf("Controls:\n");
     printf("  's' - Start/Stop data collection\n");
     printf("  'q' - Quit program\n");
-    printf("Waiting for initialization (25 seconds)...\n");
+    printf("Waiting for initialization (5 seconds)...\n");
 }
 
 // ================================================================
@@ -174,7 +174,7 @@ void loop() {
     useconds = end.tv_usec - start.tv_usec;
     timestart = ((seconds) * 1000 + useconds/1000.0) + 0.5;
     
-    if(timestart>25000)
+    if(timestart>5000)
         digitalWrite(lgreen,HIGH);
         
     // Check for keyboard input
@@ -193,7 +193,7 @@ void loop() {
         exit(0);
     }
     
-    if ((key == 's' || key == 'S') && timestart>25000){
+    if ((key == 's' || key == 'S') && timestart>5000){
         if(state){
             // Stop data collection
             fclose(arq_Accel);
